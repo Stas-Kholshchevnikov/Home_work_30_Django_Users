@@ -1,14 +1,15 @@
 import json
 
-from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import DetailView, CreateView, UpdateView, DeleteView
+from rest_framework.generics import ListAPIView
+from rest_framework.viewsets import ModelViewSet
 
 from ads.models import Category, Ad
+from ads.serializers import AdListSerializer, CategorySerializer
 from users.models import User
 
 
@@ -16,54 +17,38 @@ def start_page(request):
     return JsonResponse({"status": "ok"})
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class CatCreateView(CreateView):
-    model = Category
-    fields = '__all__'
-
-    def post(self, request, *args, **kwargs):
-        data = json.loads(request.body)
-        new_category = Category.objects.create(name=data.get("name"))
-        return JsonResponse({"id": new_category.id, "name": new_category.name})
+class CategoryViewSet(ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
 
 
-class CatListView(ListView):
-    model = Category
+class AdListView(ListAPIView):
+    queryset = Ad.objects.all().order_by("-price")
+    serializer_class = AdListSerializer
 
-    def get(self, request, *args, **kwargs):
-        super().get(request, *args, **kwargs)
-        return JsonResponse([{"id": item.id, "name": item.name} for item in self.object_list.order_by("name")], safe=False)
+    def list(self, request, *args, **kwargs):
 
+        category = request.GET.get("cat")
+        if category:
+            self.queryset = self.queryset.filter(category_id__in=category)
 
-class CatDetailView(DetailView):
-    model = Category
+        text = request.GET.get("text")
+        if text:
+            self.queryset = self.queryset.filter(name__icontains=text)
 
-    def get(self, request, *args, **kwargs):
-        result = self.get_object()
-        return JsonResponse({"id": result.id, "name": result.name})
+        location = request.GET.get("location")
+        if location:
+            self.queryset = self.queryset.filter(author__location__name__icontains=location)
 
+        price_from = request.GET.get("price_from")
+        if price_from:
+            self.queryset = self.queryset.filter(price__gte=price_from)
 
-@method_decorator(csrf_exempt, name='dispatch')
-class CatUpdateView(UpdateView):
-    model = Category
-    fields = '__all__'
+        price_to = request.GET.get("price_to")
+        if price_to:
+            self.queryset = self.queryset.filter(price__lte=price_to)
 
-    def patch(self, request, *args, **kwargs):
-        super().post(request, *args, **kwargs)
-        data = json.loads(request.body)
-        self.object.name = data.get("name")
-        self.object.save()
-        return JsonResponse({"id": self.object.id, "name": self.object.name})
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class CatDeleteView(DeleteView):
-    model = Category
-    success_url = "/"
-
-    def delete(self, request, *args, **kwargs):
-        super().delete(request, *args, **kwargs)
-        return JsonResponse({"status": "ok"}, status=204)
+        return super().list(request, *args, **kwargs)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -147,23 +132,6 @@ class AdImageView(UpdateView):
                              "is_published": self.object.is_published,
                              "category": self.object.category.name,
                              "image": self.object.image.url})
-
-
-class AdListView(ListView):
-    model = Ad
-
-    def get(self, request, *args, **kwargs):
-        super().get(request, *args, **kwargs)
-        self.object_list = self.object_list.order_by("-price")
-        paginator = Paginator(self.object_list, 10)
-        page_num = request.GET.get("page", 1)
-        page_obj = paginator.get_page(page_num)
-        return JsonResponse({"total": page_obj.paginator.count,
-                             "num_pages": page_obj.paginator.num_pages,
-                             "items": [{"id": item.id,
-                                        "name": item.name,
-                                        "author": item.author.username,
-                                        "price": item.price} for item in page_obj]}, safe=False)
 
 
 class AdDetailView(DetailView):
