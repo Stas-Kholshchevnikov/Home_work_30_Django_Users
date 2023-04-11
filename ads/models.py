@@ -16,7 +16,7 @@ class Category(models.Model):
 
 class Ad(models.Model):
     name = models.CharField(max_length=1000, null=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     price = models.PositiveIntegerField(null=True)
     description = models.TextField(null=True)
     is_published = models.BooleanField(null=True)
@@ -29,3 +29,16 @@ class Ad(models.Model):
     class Meta:
         verbose_name = "Объявление"
         verbose_name_plural = "Объявления"
+
+
+class Selection(models.Model):
+    name = models.CharField(max_length=200)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    items = models.ManyToManyField(Ad)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Подборка"
+        verbose_name_plural = "Подборки"
